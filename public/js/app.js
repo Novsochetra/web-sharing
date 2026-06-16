@@ -169,14 +169,14 @@
 
     let actions = '';
     if (item.type === 'file') {
-      actions += '<button class="btn btn-download btn-icon" data-action="download" data-id="' + item.id + '" title="Download">⬇️</button>';
+      actions += '<button class="btn btn-download btn-icon" data-action="download" data-id="' + item.id + '" title="Download">[↓]</button>';
       if (item.mimeType && (item.mimeType.startsWith('image/') || item.mimeType.startsWith('video/') || item.mimeType.startsWith('audio/'))) {
-        actions += '<button class="btn btn-ghost btn-icon" data-action="preview" data-id="' + item.id + '" title="Preview">👁</button>';
+        actions += '<button class="btn btn-ghost btn-icon" data-action="preview" data-id="' + item.id + '" title="Preview">[◉]</button>';
       }
     } else {
       actions += '<button class="btn btn-ghost" data-action="toggle-text" data-id="' + item.id + '">show</button>';
     }
-    actions += '<button class="btn btn-delete btn-icon" data-action="delete" data-id="' + item.id + '" title="Delete">🗑</button>';
+    actions += '<button class="btn btn-delete btn-icon" data-action="delete" data-id="' + item.id + '" title="Delete">[×]</button>';
 
     let textBlock = '';
     if (item.type === 'text') {
