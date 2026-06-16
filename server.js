@@ -70,20 +70,22 @@ const ACCESS_DENIED_HTML = `<!DOCTYPE html>
 </head><body><div class="box"><h1>Access Denied</h1><p>Invalid or missing token. Scan the QR code or use the full URL.</p></div></body></html>`;
 
 function requireToken(req, res, next) {
+  if (req.path.startsWith('/socket.io/')) return next();
+
+  const staticExts = ['.css', '.js', '.map', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot'];
+  if (staticExts.some(ext => req.path.toLowerCase().endsWith(ext))) return next();
+
   const cookies = parseCookies(req.headers.cookie || '');
   const fromCookie = cookies.token;
   const fromQuery = req.query.token;
   const valid = (fromCookie === TOKEN) || (fromQuery === TOKEN);
 
   if (valid) {
-    if (!fromCookie) {
-      res.setHeader('Set-Cookie', `token=${TOKEN}; HttpOnly; Path=/`);
-      return res.redirect(req.path);
+    if (fromCookie !== TOKEN) {
+      res.cookie('token', TOKEN, { httpOnly: true, path: '/', sameSite: 'lax' });
     }
     return next();
   }
-
-  if (req.path.startsWith('/socket.io/')) return next();
 
   res.status(403).type('html').send(ACCESS_DENIED_HTML);
 }
@@ -239,6 +241,10 @@ app.delete('/api/items', (_req, res) => {
 io.use((socket, next) => {
   const cookies = parseCookies(socket.handshake.headers.cookie || '');
   if (cookies.token === TOKEN) return next();
+
+  const queryToken = socket.handshake.query.token;
+  if (queryToken === TOKEN) return next();
+
   next(new Error('Unauthorized'));
 });
 

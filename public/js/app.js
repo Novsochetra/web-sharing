@@ -1,5 +1,7 @@
 (function () {
-  const socket = io();
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  const socket = io(token ? { query: { token } } : undefined);
 
   // Tab elements
   const tabs = document.querySelectorAll('.tab');
@@ -69,11 +71,35 @@
   }
 
   copyUrlBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(shareUrlStr).then(() => {
-      copyUrlBtn.textContent = 'Copied!';
-      setTimeout(() => { copyUrlBtn.textContent = 'Copy URL'; }, 1500);
-    }).catch(() => {});
+    const text = shareUrlStr;
+    if (!text) return;
+    const done = () => {
+      copyUrlBtn.textContent = '[OK] copied';
+      setTimeout(() => { copyUrlBtn.textContent = 'copy_url'; }, 1500);
+    };
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+    } catch (_) {
+      fallbackCopy(text, done);
+    }
   });
+
+  function fallbackCopy(text, done) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (_) {}
+    document.body.removeChild(ta);
+  }
 
   // Utils
   function formatSize(bytes) {
@@ -143,14 +169,14 @@
 
     let actions = '';
     if (item.type === 'file') {
-      actions += '<button class="btn btn-download" data-action="download" data-id="' + item.id + '">Download</button>';
+      actions += '<button class="btn btn-download" data-action="download" data-id="' + item.id + '">dl</button>';
       if (item.mimeType && (item.mimeType.startsWith('image/') || item.mimeType.startsWith('video/') || item.mimeType.startsWith('audio/'))) {
-        actions += '<button class="btn btn-ghost" data-action="preview" data-id="' + item.id + '">Preview</button>';
+        actions += '<button class="btn btn-ghost" data-action="preview" data-id="' + item.id + '">view</button>';
       }
     } else {
-      actions += '<button class="btn btn-ghost" data-action="toggle-text" data-id="' + item.id + '">Show Text</button>';
+      actions += '<button class="btn btn-ghost" data-action="toggle-text" data-id="' + item.id + '">show</button>';
     }
-    actions += '<button class="btn btn-delete" data-action="delete" data-id="' + item.id + '">Delete</button>';
+    actions += '<button class="btn btn-delete" data-action="delete" data-id="' + item.id + '">rm</button>';
 
     let textBlock = '';
     if (item.type === 'text') {
@@ -184,7 +210,7 @@
       const el = document.getElementById('text-' + id);
       if (el) {
         el.classList.toggle('show');
-        btn.textContent = el.classList.contains('show') ? 'Hide Text' : 'Show Text';
+        btn.textContent = el.classList.contains('show') ? 'hide' : 'show';
       }
     } else if (action === 'delete') {
       deleteItem(id);
@@ -233,7 +259,7 @@
 
   // Clear all
   clearAllBtn.addEventListener('click', async () => {
-    if (!confirm('Delete all received items?')) return;
+    if (!confirm('[?] wipe all received items?')) return;
     await fetch('/api/items', { method: 'DELETE' });
   });
 
@@ -291,7 +317,7 @@
   function setLoading(loading) {
     sendBtn.disabled = loading;
     sendSpinner.style.display = loading ? 'inline-block' : 'none';
-    sendBtnText.textContent = loading ? 'Sending...' : 'Send';
+    sendBtnText.textContent = loading ? 'EXECUTING...' : 'EXECUTE_SEND';
   }
 
   function clearForm() {
@@ -308,7 +334,7 @@
     const hasText = textInput.value.trim().length > 0;
 
     if (!hasFiles && !hasText) {
-      setStatus('error', 'Select files or type a message');
+      setStatus('error', '[ERR] select_files or type a message');
       return;
     }
 
@@ -323,7 +349,7 @@
       try {
         await uploadWithProgress(formData);
       } catch (err) {
-        setStatus('error', err.message || 'Upload failed');
+        setStatus('error', '[ERR] upload_failed');
         setLoading(false);
         uploadProgress.classList.remove('show');
         return;
@@ -338,7 +364,7 @@
           body: JSON.stringify({ text: textInput.value.trim() }),
         });
       } catch (err) {
-        setStatus('error', 'Failed to send text');
+        setStatus('error', '[ERR] text_send_failed');
         setLoading(false);
         uploadProgress.classList.remove('show');
         return;
@@ -347,7 +373,7 @@
 
     clearForm();
     setLoading(false);
-    setStatus('success', 'Sent!');
+    setStatus('success', '[OK] transfer complete');
   });
 
   function uploadWithProgress(formData) {
@@ -359,7 +385,7 @@
         if (e.lengthComputable) {
           const pct = Math.round((e.loaded / e.total) * 100);
           progressFill.style.width = pct + '%';
-          progressText.textContent = 'Uploading... ' + pct + '%';
+          progressText.textContent = 'uploading... ' + pct + '%';
         }
       });
 

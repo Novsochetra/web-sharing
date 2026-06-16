@@ -10,7 +10,7 @@
   <div class="container">
     <header class="header">
       <h1>WebShare</h1>
-      <p class="subtitle">Connected on <span id="device-ip">...</span></p>
+      <p class="subtitle">&gt; Connected on <span id="device-ip">...</span> <span class="cursor"></span></p>
     </header>
 
     <!-- QR -->
@@ -19,8 +19,8 @@
       <div class="qr-wrap">
         <img id="qr-image" src="" alt="QR Code" width="200" height="200">
       </div>
-      <div class="share-url" id="share-url">Loading...</div>
-      <button class="copy-btn" id="copy-url-btn">Copy URL</button>
+      <div class="share-url" id="share-url">loading...</div>
+      <button class="copy-btn" id="copy-url-btn">copy_url</button>
     </div>
 
     <!-- Tabs -->
@@ -31,43 +31,47 @@
 
     <!-- Send Panel -->
     <div class="tab-panel active" id="panel-send">
+      <div class="card">
       <div class="upload-zone" id="upload-zone">
         <input type="file" id="file-input" multiple hidden>
         <span class="zone-icon">&#128193;</span>
-        <p class="zone-text"><strong>Choose files</strong> or drag & drop here</p>
-        <p class="zone-text zone-hint">Max 500MB per file</p>
+        <p class="zone-text">&gt; <strong>choose_files</strong> or drag &amp; drop here</p>
+        <p class="zone-text zone-hint">// max 500MB per file</p>
       </div>
 
       <div class="file-list" id="file-list"></div>
 
       <div class="upload-progress" id="upload-progress">
-        <div class="progress-text" id="progress-text">Uploading...</div>
+        <div class="progress-text" id="progress-text">uploading...</div>
         <div class="progress-bar">
           <div class="progress-fill" id="progress-fill"></div>
         </div>
       </div>
 
-      <textarea class="text-area" id="text-input" placeholder="Or type a message / paste text..."></textarea>
+      <textarea class="text-area" id="text-input" placeholder="> type a message or paste text..."></textarea>
 
       <button class="send-btn" id="send-btn">
-        <span id="send-btn-text">Send</span>
+        <span id="send-btn-text">EXECUTE_SEND</span>
         <span class="spinner" id="send-spinner" style="display:none;"></span>
       </button>
 
       <div class="status-msg" id="status-msg"></div>
+      </div>
     </div>
 
     <!-- Inbox Panel -->
     <div class="tab-panel" id="panel-inbox">
+      <div class="card">
       <div class="inbox-header">
         <h2>Received</h2>
-        <button class="btn btn-danger-ghost" id="clear-all-btn">Clear All</button>
+        <button class="btn btn-danger-ghost" id="clear-all-btn">wipe_all</button>
       </div>
       <div id="inbox-list">
         <div class="empty-state">
           <div class="icon">&#128229;</div>
           Nothing here yet
         </div>
+      </div>
       </div>
     </div>
   </div>
