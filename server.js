@@ -1,3 +1,7 @@
+if (process.pkg && !process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -17,7 +21,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const UPLOADS_DIR = path.join(__dirname, 'uploads', TOKEN);
+const UPLOADS_DIR = path.join(process.cwd(), 'uploads', TOKEN);
 const DATA_FILE = path.join(UPLOADS_DIR, 'data.json');
 
 if (!fs.existsSync(UPLOADS_DIR)) {
