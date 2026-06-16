@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "id": "a7d889a9-1cb2-4313-8503-ce916a6ff336",
+      "type": "file",
+      "originalName": "IMG_6762.png",
+      "size": 2115586,
+      "mimeType": "image/png",
+      "storedFilename": "a7d889a9-1cb2-4313-8503-ce916a6ff336.png",
+      "textContent": null,
+      "timestamp": 1781595408916
+    },
+    {
+      "id": "7e07f1ca-be16-4379-8add-e22891af4682",
+      "type": "file",
+      "originalName": "Heritage Bayou Seafood - Product Create Template - 1781591490731.xlsx",
+      "size": 40145,
+      "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "storedFilename": "7e07f1ca-be16-4379-8add-e22891af4682.xlsx",
+      "textContent": null,
+      "timestamp": 1781595423556
+    },
+    {
+      "id": "726259f6-0f9a-4e1f-9d80-61a580b17b03",
+      "type": "text",
+      "originalName": null,
+      "size": 5,
+      "mimeType": "text/plain",
+      "storedFilename": null,
+      "textContent": "Hello",
+      "timestamp": 1781595478083
+    }
+  ]
+}
