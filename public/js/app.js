@@ -39,6 +39,112 @@
   let shareUrlStr = '';
   let selectedFiles = [];
   let allItems = [];
+  let lastSentIds = new Set();
+  let lastDeletedIds = new Set();
+  let lastWiped = false;
+  let isFirstItemsUpdate = true;
+  let suppressNotificationsUntil = 0;
+
+  function suppressNotifications(ms) {
+    suppressNotificationsUntil = Date.now() + (ms || 1500);
+  }
+  function shouldSuppressNotifications() {
+    return Date.now() < suppressNotificationsUntil;
+  }
+
+  // Notification Manager
+  const NotificationManager = (function() {
+    const container = document.createElement('div');
+    container.className = 'notification-container';
+    document.body.appendChild(container);
+
+    const MAX_VISIBLE = 5;
+    const DEFAULT_DURATION = 4000;
+    let notifications = [];
+    let idCounter = 0;
+
+    const PREFIXES = {
+      success: '[OK]',
+      error: '[ERR]',
+      info: '[INFO]',
+      warning: '[WARN]'
+    };
+
+    const TITLES = {
+      success: 'SUCCESS',
+      error: 'ERROR',
+      info: 'INFO',
+      warning: 'WARNING'
+    };
+
+    function create(type, message, duration) {
+      const id = ++idCounter;
+      const notif = document.createElement('div');
+      notif.className = 'notification ' + type;
+      notif.id = 'notif-' + id;
+      const prefix = PREFIXES[type] || '[INFO]';
+      const title = TITLES[type] || 'INFO';
+      notif.innerHTML = '<div class="notif-header">' +
+        '<span class="notif-prefix">' + prefix + '</span>' +
+        '<span class="notif-title">' + title + '</span>' +
+        '<button class="notif-close" data-id="' + id + '">[×]</button>' +
+        '</div>' +
+        '<div class="notif-body">' + esc(message) + '</div>' +
+        '<div class="notif-progress"><div class="notif-progress-fill"></div></div>';
+      return { id, el: notif, duration };
+    }
+
+    function show(type, message, duration) {
+      duration = duration || DEFAULT_DURATION;
+      const n = create(type, message, duration);
+      if (notifications.length >= MAX_VISIBLE) {
+        const old = notifications.shift();
+        remove(old.id, true);
+      }
+      notifications.push(n);
+      container.appendChild(n.el);
+      requestAnimationFrame(() => {
+        n.el.classList.add('show');
+      });
+      const fill = n.el.querySelector('.notif-progress-fill');
+      let startTime = null;
+      function animateProgress(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+        const pct = Math.min(100, (elapsed / duration) * 100);
+        fill.style.width = pct + '%';
+        if (pct < 100) {
+          requestAnimationFrame(animateProgress);
+        }
+      }
+      requestAnimationFrame(animateProgress);
+      n.timer = setTimeout(() => remove(n.id), duration);
+    }
+
+    function remove(id, skipAnim) {
+      const idx = notifications.findIndex(n => n.id === id);
+      if (idx === -1) return;
+      const n = notifications[idx];
+      clearTimeout(n.timer);
+      notifications.splice(idx, 1);
+      if (skipAnim) {
+        n.el.remove();
+      } else {
+        n.el.classList.remove('show');
+        n.el.classList.add('hide');
+        setTimeout(() => n.el.remove(), 400);
+      }
+    }
+
+    container.addEventListener('click', (e) => {
+      const closeBtn = e.target.closest('.notif-close');
+      if (closeBtn) {
+        remove(parseInt(closeBtn.dataset.id));
+      }
+    });
+
+    return { show, remove };
+  })();
 
   // Tab switching
   tabs.forEach((tab) => {
@@ -218,6 +324,8 @@
   });
 
   async function deleteItem(id) {
+    lastDeletedIds.add(id);
+    suppressNotifications(1500);
     await fetch('/api/items/' + id, { method: 'DELETE' });
   }
 
@@ -260,6 +368,8 @@
   // Clear all
   clearAllBtn.addEventListener('click', async () => {
     if (!confirm('[?] wipe all received items?')) return;
+    lastWiped = true;
+    suppressNotifications(1500);
     await fetch('/api/items', { method: 'DELETE' });
   });
 
@@ -347,9 +457,12 @@
       uploadProgress.classList.add('show');
 
       try {
-        await uploadWithProgress(formData);
+        const uploadResult = await uploadWithProgress(formData);
+        if (uploadResult && uploadResult.uploadIds) {
+          uploadResult.uploadIds.forEach((id) => lastSentIds.add(id));
+        }
+        suppressNotifications(1500);
       } catch (err) {
-        setStatus('error', '[ERR] upload_failed');
         setLoading(false);
         uploadProgress.classList.remove('show');
         return;
@@ -358,13 +471,17 @@
 
     if (hasText) {
       try {
-        await fetch('/api/text', {
+        const response = await fetch('/api/text', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: textInput.value.trim() }),
         });
+        const textResult = await response.json();
+        if (textResult && textResult.uploadId) {
+          lastSentIds.add(textResult.uploadId);
+        }
+        suppressNotifications(1500);
       } catch (err) {
-        setStatus('error', '[ERR] text_send_failed');
         setLoading(false);
         uploadProgress.classList.remove('show');
         return;
@@ -373,7 +490,6 @@
 
     clearForm();
     setLoading(false);
-    setStatus('success', '[OK] transfer complete');
   });
 
   function uploadWithProgress(formData) {
@@ -391,7 +507,12 @@
 
       xhr.addEventListener('load', () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch (e) {
+            resolve({});
+          }
         } else {
           reject(new Error('Upload failed (status ' + xhr.status + ')'));
         }
@@ -405,8 +526,58 @@
 
   // Socket.io
   socket.on('items-updated', (items) => {
-    allItems = items || [];
+    const newItems = items || [];
+    const oldIds = new Set(allItems.map((i) => i.id));
+    const newIds = new Set(newItems.map((i) => i.id));
+
+    const addedItems = newItems.filter((i) => !oldIds.has(i.id));
+    const removedItems = allItems.filter((i) => !newIds.has(i.id));
+
+    // Clean up stale sent IDs and deleted IDs
+    const validIds = new Set(newItems.map((i) => i.id));
+    lastSentIds.forEach((id) => {
+      if (!validIds.has(id)) lastSentIds.delete(id);
+    });
+    lastDeletedIds.forEach((id) => {
+      if (!validIds.has(id)) lastDeletedIds.delete(id);
+    });
+
+    if (!isFirstItemsUpdate && !shouldSuppressNotifications()) {
+      if (allItems.length > 0 && newItems.length === 0) {
+        if (!lastWiped) {
+          NotificationManager.show('warning', 'All items wiped');
+        }
+      } else if (removedItems.length > 0) {
+        const removedByOthers = removedItems.filter((i) => !lastDeletedIds.has(i.id));
+        if (removedByOthers.length > 0) {
+          const name = removedByOthers.length === 1
+            ? (removedByOthers[0].type === 'text' ? 'Text message' : removedByOthers[0].originalName)
+            : removedByOthers.length + ' items';
+          NotificationManager.show('warning', name + ' deleted');
+        }
+      } else if (addedItems.length > 0) {
+        const addedByOthers = addedItems.filter((i) => !lastSentIds.has(i.id));
+        if (addedByOthers.length > 0) {
+          const name = addedByOthers.length === 1
+            ? (addedByOthers[0].type === 'text' ? 'Text message' : addedByOthers[0].originalName)
+            : addedByOthers.length + ' new items';
+          NotificationManager.show('info', 'Received: ' + name);
+        }
+      }
+    }
+    lastWiped = false;
+    isFirstItemsUpdate = false;
+
+    allItems = newItems;
     renderInbox(allItems);
+  });
+
+  socket.on('user-connected', () => {
+    NotificationManager.show('info', 'New device connected');
+  });
+
+  socket.on('user-disconnected', () => {
+    NotificationManager.show('info', 'Device disconnected');
   });
 
   // Init

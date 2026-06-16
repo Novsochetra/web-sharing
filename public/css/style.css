@@ -673,3 +673,160 @@ body::before {
 }
 .inbox-header h2::before { content: '[ '; }
 .inbox-header h2::after { content: ' ]'; }
+
+/* Notifications */
+.notification-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 320px;
+  pointer-events: none;
+}
+
+.notification {
+  pointer-events: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 20px rgba(0,0,0,0.5);
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.notification.show {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.notification.hide {
+  transform: translateX(120%);
+  opacity: 0;
+  transition: transform 0.3s ease-in, opacity 0.2s;
+}
+
+.notification.success {
+  border-color: var(--text);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.15), inset 0 0 10px rgba(0, 255, 136, 0.03);
+}
+
+.notification.error {
+  border-color: var(--red);
+  box-shadow: 0 0 20px rgba(255, 0, 170, 0.15), inset 0 0 10px rgba(255, 0, 170, 0.03);
+}
+
+.notification.info {
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(0, 204, 255, 0.15), inset 0 0 10px rgba(0, 204, 255, 0.03);
+}
+
+.notification.warning {
+  border-color: var(--orange);
+  box-shadow: 0 0 20px rgba(255, 170, 0, 0.15), inset 0 0 10px rgba(255, 170, 0, 0.03);
+}
+
+.notification.success .notif-body { color: var(--text); }
+.notification.error .notif-body { color: var(--red); }
+.notification.info .notif-body { color: var(--cyan); }
+.notification.warning .notif-body { color: var(--orange); }
+
+.notif-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.notification.success .notif-prefix { color: var(--text); text-shadow: 0 0 8px var(--text); }
+.notification.error .notif-prefix { color: var(--red); text-shadow: 0 0 8px var(--red); }
+.notification.info .notif-prefix { color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+.notification.warning .notif-prefix { color: var(--orange); text-shadow: 0 0 8px var(--orange); }
+
+.notif-title {
+  color: var(--text-dim);
+  flex: 1;
+}
+
+.notif-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.notif-close:hover { color: var(--red); }
+
+.notif-body {
+  font-size: 0.82rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.notif-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255,255,255,0.05);
+}
+
+.notif-progress-fill {
+  height: 100%;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+.notification.success .notif-progress-fill { background: var(--text); box-shadow: 0 0 6px var(--text); }
+.notification.error .notif-progress-fill { background: var(--red); box-shadow: 0 0 6px var(--red); }
+.notification.info .notif-progress-fill { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.notification.warning .notif-progress-fill { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+/* Glitch entrance animation on notification */
+.notification::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.notification.show::before {
+  animation: notif-glitch 0.3s ease-out;
+}
+
+@keyframes notif-glitch {
+  0% { opacity: 1; transform: translateX(-10%); }
+  25% { opacity: 0.5; transform: translateX(5%); }
+  50% { opacity: 1; transform: translateX(-3%); }
+  75% { opacity: 0.3; transform: translateX(2%); }
+  100% { opacity: 0; transform: translateX(0); }
+}
+
+@media (max-width: 480px) {
+  .notification-container {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}

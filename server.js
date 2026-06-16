@@ -250,6 +250,11 @@ io.use((socket, next) => {
 
 io.on('connection', (socket) => {
   socket.emit('items-updated', loadData().items);
+  socket.broadcast.emit('user-connected');
+
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('user-disconnected');
+  });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
