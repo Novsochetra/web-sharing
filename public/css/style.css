@@ -141,6 +141,7 @@ body::before {
 .badge.zero { background: rgba(0, 255, 136, 0.1); color: var(--text-dim); }
 
 /* QR Code */
+.qr-section > .scan-to-join { display: flex; justify-content: center;}
 .qr-section { text-align: center; }
 .qr-section > h2::before { content: '[ '; }
 .qr-section > h2::after { content: ' ]'; }
