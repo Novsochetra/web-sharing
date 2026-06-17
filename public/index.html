@@ -7,12 +7,29 @@
     <link rel="stylesheet" href="/css/style.css" />
   </head>
   <body>
+    <div id="splash-screen" class="splash-screen">
+      <div class="splash-terminal">
+        <div class="splash-header">
+          <span class="splash-dot"></span>
+          <span class="splash-dot"></span>
+          <span class="splash-dot"></span>
+          <span class="splash-title">WEBSHARE OS</span>
+        </div>
+        <div class="splash-log" id="splash-log"></div>
+        <div class="splash-progress">
+          <div class="splash-progress-track">
+            <div class="splash-progress-fill" id="splash-progress-fill"></div>
+          </div>
+          <div class="splash-progress-text" id="splash-progress-text">0%</div>
+        </div>
+        <div class="splash-footer">v1.0.0 // local-node</div>
+      </div>
+    </div>
+
     <div class="container">
       <header class="header">
         <h1>WebShare</h1>
-        <p class="subtitle">
-          &gt; Connected on <span id="device-ip">...</span> <span class="cursor"></span>
-        </p>
+        <p class="subtitle"><span id="subtitle-text"></span><span class="cursor"></span></p>
       </header>
 
       <!-- QR -->

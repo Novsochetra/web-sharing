@@ -5,9 +5,10 @@ import { LABELS } from '../constants.js';
 const qrImage = document.getElementById('qr-image');
 const shareUrlEl = document.getElementById('share-url');
 const copyUrlBtn = document.getElementById('copy-url-btn');
-const deviceIp = document.getElementById('device-ip');
 
 export async function loadInfo() {
+  let info = { ip: LABELS.localhost, port: '3000' };
+
   try {
     const data = await fetchQrCode();
     qrImage.src = data.qrcode;
@@ -18,11 +19,12 @@ export async function loadInfo() {
   }
 
   try {
-    const info = await fetchInfo();
-    deviceIp.textContent = info.ip + ':' + info.port;
+    info = await fetchInfo();
   } catch {
-    deviceIp.textContent = LABELS.localhost;
+    // keep fallback info
   }
+
+  return info;
 }
 
 function fallbackCopy(text, done) {

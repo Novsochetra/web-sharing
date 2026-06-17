@@ -37,3 +37,27 @@ export function truncate(str, max) {
   if (!str) return '';
   return str.replace(/\n/g, ' ').substring(0, max) + (str.length > max ? '...' : '');
 }
+
+export function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function typeWriter(element, text, options = {}) {
+  const { speed = 45, onDone, jitter = 15 } = options;
+  element.textContent = '';
+  for (let i = 0; i < text.length; i += 1) {
+    element.textContent += text[i];
+    const delay = speed + Math.random() * jitter;
+    await wait(delay);
+  }
+  if (typeof onDone === 'function') onDone();
+}
+
+export async function deleteText(element, options = {}) {
+  const { speed = 25, onDone } = options;
+  while (element.textContent.length > 0) {
+    element.textContent = element.textContent.slice(0, -1);
+    await wait(speed);
+  }
+  if (typeof onDone === 'function') onDone();
+}

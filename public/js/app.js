@@ -10,10 +10,12 @@ import {
   shouldSuppressNotifications,
   tryBufferEvent,
 } from './state.js';
+import { deleteText, typeWriter, wait } from './utils.js';
 import { initInbox, renderInbox } from './ui/inbox.js';
 import { initPreview } from './ui/preview.js';
 import { initQr, loadInfo } from './ui/qr.js';
 import { initSend } from './ui/send.js';
+import { completeSplash, initSplash, markDataLoaded } from './ui/splash.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 const token = urlParams.get('token');
@@ -21,6 +23,7 @@ const socket = io(token ? { query: { token } } : undefined);
 
 const tabs = document.querySelectorAll('.tab');
 const panels = document.querySelectorAll('.tab-panel');
+const subtitle = document.getElementById('subtitle-text');
 
 function initTabs() {
   tabs.forEach((tab) => {
@@ -92,7 +95,32 @@ function initSocket() {
   });
 }
 
-function init() {
+function buildTitleMessages(info) {
+  const endpoint = info.ip + ':' + info.port;
+  return [
+    '> Connected on ' + endpoint,
+    '> Waiting for incoming files...',
+    '> Drop files or type a message',
+    '> Bridge open on port ' + info.port,
+  ];
+}
+
+async function runTitleLoop(info) {
+  const messages = buildTitleMessages(info);
+  let index = 0;
+
+  while (true) {
+    const message = messages[index % messages.length];
+    await typeWriter(subtitle, message, { speed: 45, jitter: 12 });
+    await wait(2400);
+    await deleteText(subtitle, { speed: 22 });
+    await wait(400);
+    index += 1;
+  }
+}
+
+async function boot() {
+  const splashReady = initSplash();
   registerEventHandler(handleItemsUpdated);
   initTabs();
   initQr();
@@ -100,7 +128,17 @@ function init() {
   initInbox();
   initPreview();
   initSocket();
-  loadInfo();
+
+  let info;
+  try {
+    info = await loadInfo();
+  } catch {
+    info = { ip: LABELS.localhost, port: '3000' };
+  }
+  markDataLoaded();
+  await splashReady;
+  await completeSplash();
+  runTitleLoop(info);
 }
 
-init();
+boot();
