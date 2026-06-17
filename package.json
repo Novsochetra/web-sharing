@@ -2,16 +2,33 @@
   "name": "web-local-file-sharing",
   "version": "1.0.0",
   "description": "Local network file sharing between devices",
-  "main": "server.js",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "build": "pkg server.js -c package.json --output dist/webshare --targets node18-macos-arm64 --compress Brotli",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "build": "pkg src/server.js -c package.json --output dist/webshare --targets node18-macos-arm64 --compress Brotli",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "prepare": "husky",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop ecosystem.config.js",
     "pm2:restart": "pm2 restart ecosystem.config.js",
     "pm2:logs": "pm2 logs webshare",
     "pm2:status": "pm2 status"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,html,json,md}": [
+      "prettier --write"
+    ]
   },
   "pkg": {
     "assets": [
@@ -26,6 +43,12 @@
     "uuid": "11.1.0"
   },
   "devDependencies": {
-    "pkg": "^5.8.1"
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "pkg": "^5.8.1",
+    "prettier": "^3.8.4"
   }
 }

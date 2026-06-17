@@ -1,152 +1,26 @@
-(function () {
-  const urlParams = new URLSearchParams(window.location.search);
-  const token = urlParams.get('token');
-  const socket = io(token ? { query: { token } } : undefined);
+import { LABELS } from './constants.js';
+import { NotificationManager } from './notifications.js';
+import {
+  cleanupStaleIds,
+  getState,
+  setAllItems,
+  setFirstItemsUpdate,
+  setLastWiped,
+  shouldSuppressNotifications,
+} from './state.js';
+import { initInbox, renderInbox } from './ui/inbox.js';
+import { initPreview } from './ui/preview.js';
+import { initQr, loadInfo } from './ui/qr.js';
+import { initSend } from './ui/send.js';
 
-  // Tab elements
-  const tabs = document.querySelectorAll('.tab');
-  const panels = document.querySelectorAll('.tab-panel');
-  const inboxBadge = document.getElementById('inbox-badge');
+const urlParams = new URLSearchParams(window.location.search);
+const token = urlParams.get('token');
+const socket = io(token ? { query: { token } } : undefined);
 
-  // QR elements
-  const qrImage = document.getElementById('qr-image');
-  const shareUrlEl = document.getElementById('share-url');
-  const copyUrlBtn = document.getElementById('copy-url-btn');
-  const deviceIp = document.getElementById('device-ip');
+const tabs = document.querySelectorAll('.tab');
+const panels = document.querySelectorAll('.tab-panel');
 
-  // Send elements
-  const uploadZone = document.getElementById('upload-zone');
-  const fileInput = document.getElementById('file-input');
-  const fileList = document.getElementById('file-list');
-  const textInput = document.getElementById('text-input');
-  const sendBtn = document.getElementById('send-btn');
-  const sendBtnText = document.getElementById('send-btn-text');
-  const sendSpinner = document.getElementById('send-spinner');
-  const statusMsg = document.getElementById('status-msg');
-  const uploadProgress = document.getElementById('upload-progress');
-  const progressFill = document.getElementById('progress-fill');
-  const progressText = document.getElementById('progress-text');
-
-  // Inbox elements
-  const inboxList = document.getElementById('inbox-list');
-  const clearAllBtn = document.getElementById('clear-all-btn');
-
-  // Preview modal
-  const previewModal = document.getElementById('preview-modal');
-  const previewContent = document.getElementById('preview-content');
-  const modalClose = document.getElementById('modal-close');
-
-  let shareUrlStr = '';
-  let selectedFiles = [];
-  let allItems = [];
-  let lastSentIds = new Set();
-  let lastDeletedIds = new Set();
-  let lastWiped = false;
-  let isFirstItemsUpdate = true;
-  let suppressNotificationsUntil = 0;
-
-  function suppressNotifications(ms) {
-    suppressNotificationsUntil = Date.now() + (ms || 1500);
-  }
-  function shouldSuppressNotifications() {
-    return Date.now() < suppressNotificationsUntil;
-  }
-
-  // Notification Manager
-  const NotificationManager = (function() {
-    const container = document.createElement('div');
-    container.className = 'notification-container';
-    document.body.appendChild(container);
-
-    const MAX_VISIBLE = 5;
-    const DEFAULT_DURATION = 4000;
-    let notifications = [];
-    let idCounter = 0;
-
-    const PREFIXES = {
-      success: '[OK]',
-      error: '[ERR]',
-      info: '[INFO]',
-      warning: '[WARN]'
-    };
-
-    const TITLES = {
-      success: 'SUCCESS',
-      error: 'ERROR',
-      info: 'INFO',
-      warning: 'WARNING'
-    };
-
-    function create(type, message, duration) {
-      const id = ++idCounter;
-      const notif = document.createElement('div');
-      notif.className = 'notification ' + type;
-      notif.id = 'notif-' + id;
-      const prefix = PREFIXES[type] || '[INFO]';
-      const title = TITLES[type] || 'INFO';
-      notif.innerHTML = '<div class="notif-header">' +
-        '<span class="notif-prefix">' + prefix + '</span>' +
-        '<span class="notif-title">' + title + '</span>' +
-        '<button class="notif-close" data-id="' + id + '">[×]</button>' +
-        '</div>' +
-        '<div class="notif-body">' + esc(message) + '</div>' +
-        '<div class="notif-progress"><div class="notif-progress-fill"></div></div>';
-      return { id, el: notif, duration };
-    }
-
-    function show(type, message, duration) {
-      duration = duration || DEFAULT_DURATION;
-      const n = create(type, message, duration);
-      if (notifications.length >= MAX_VISIBLE) {
-        const old = notifications.shift();
-        remove(old.id, true);
-      }
-      notifications.push(n);
-      container.appendChild(n.el);
-      requestAnimationFrame(() => {
-        n.el.classList.add('show');
-      });
-      const fill = n.el.querySelector('.notif-progress-fill');
-      let startTime = null;
-      function animateProgress(timestamp) {
-        if (!startTime) startTime = timestamp;
-        const elapsed = timestamp - startTime;
-        const pct = Math.min(100, (elapsed / duration) * 100);
-        fill.style.width = pct + '%';
-        if (pct < 100) {
-          requestAnimationFrame(animateProgress);
-        }
-      }
-      requestAnimationFrame(animateProgress);
-      n.timer = setTimeout(() => remove(n.id), duration);
-    }
-
-    function remove(id, skipAnim) {
-      const idx = notifications.findIndex(n => n.id === id);
-      if (idx === -1) return;
-      const n = notifications[idx];
-      clearTimeout(n.timer);
-      notifications.splice(idx, 1);
-      if (skipAnim) {
-        n.el.remove();
-      } else {
-        n.el.classList.remove('show');
-        n.el.classList.add('hide');
-        setTimeout(() => n.el.remove(), 400);
-      }
-    }
-
-    container.addEventListener('click', (e) => {
-      const closeBtn = e.target.closest('.notif-close');
-      if (closeBtn) {
-        remove(parseInt(closeBtn.dataset.id));
-      }
-    });
-
-    return { show, remove };
-  })();
-
-  // Tab switching
+function initTabs() {
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       tabs.forEach((t) => t.classList.remove('active'));
@@ -155,431 +29,72 @@
       document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
     });
   });
+}
 
-  // Load QR + info
-  async function loadInfo() {
-    try {
-      const res = await fetch('/api/qrcode');
-      const data = await res.json();
-      qrImage.src = data.qrcode;
-      shareUrlEl.textContent = data.url;
-      shareUrlStr = data.url;
-    } catch (_) {
-      shareUrlEl.textContent = 'Failed to load';
-    }
-    try {
-      const infoRes = await fetch('/api/info');
-      const info = await infoRes.json();
-      deviceIp.textContent = info.ip + ':' + info.port;
-    } catch (_) {
-      deviceIp.textContent = 'localhost';
-    }
-  }
+function getItemName(item) {
+  return item.type === 'text' ? LABELS.textMessage : item.originalName;
+}
 
-  copyUrlBtn.addEventListener('click', () => {
-    const text = shareUrlStr;
-    if (!text) return;
-    const done = () => {
-      copyUrlBtn.textContent = '[OK] copied';
-      setTimeout(() => { copyUrlBtn.textContent = 'copy_url'; }, 1500);
-    };
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
-      } else {
-        fallbackCopy(text, done);
+function handleItemsUpdated(items) {
+  const state = getState();
+  const newItems = items || [];
+  const oldIds = new Set(state.allItems.map((i) => i.id));
+  const newIds = new Set(newItems.map((i) => i.id));
+
+  const addedItems = newItems.filter((i) => !oldIds.has(i.id));
+  const removedItems = state.allItems.filter((i) => !newIds.has(i.id));
+
+  const validIds = new Set(newItems.map((i) => i.id));
+  cleanupStaleIds(validIds);
+
+  if (!state.isFirstItemsUpdate && !shouldSuppressNotifications()) {
+    if (state.allItems.length > 0 && newItems.length === 0) {
+      if (!state.lastWiped) {
+        NotificationManager.show('warning', LABELS.allItemsWiped);
       }
-    } catch (_) {
-      fallbackCopy(text, done);
-    }
-  });
-
-  function fallbackCopy(text, done) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    ta.style.top = '-9999px';
-    document.body.appendChild(ta);
-    ta.focus();
-    ta.select();
-    try { document.execCommand('copy'); done(); } catch (_) {}
-    document.body.removeChild(ta);
-  }
-
-  // Utils
-  function formatSize(bytes) {
-    if (!bytes || bytes === 0) return '';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-  }
-
-  function timeAgo(ts) {
-    const diff = Date.now() - ts;
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-    return new Date(ts).toLocaleDateString();
-  }
-
-  function getFileIcon(mimeType) {
-    if (!mimeType) return '\uD83D\uDCC4';
-    if (mimeType.startsWith('image/')) return '\uD83D\uDDBC';
-    if (mimeType.startsWith('video/')) return '\uD83C\uDFAC';
-    if (mimeType.startsWith('audio/')) return '\uD83C\uDFB5';
-    if (mimeType.includes('pdf')) return '\uD83D\uDCDC';
-    if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('tar')) return '\uD83D\uDCE6';
-    return '\uD83D\uDCC4';
-  }
-
-  function esc(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-  }
-
-  // Render inbox
-  function renderInbox(items) {
-    if (!items || items.length === 0) {
-      inboxList.innerHTML = '<div class="empty-state"><div class="icon">&#128229;</div>Nothing here yet</div>';
-    } else {
-      inboxList.innerHTML = items.map((item) => renderItem(item)).join('');
-    }
-    updateBadge(items ? items.length : 0);
-  }
-
-  function updateBadge(count) {
-    inboxBadge.textContent = count;
-    inboxBadge.className = 'tab-badge' + (count > 0 ? ' has-items' : '');
-    clearAllBtn.style.display = count > 0 ? '' : 'none';
-  }
-
-  function renderItem(item) {
-    const name = item.type === 'text'
-      ? truncate(item.textContent || '', 50)
-      : item.originalName;
-    const meta = item.type === 'text'
-      ? timeAgo(item.timestamp)
-      : formatSize(item.size) + ' &middot; ' + timeAgo(item.timestamp);
-
-    let thumb;
-    if (item.type === 'file' && item.mimeType && item.mimeType.startsWith('image/')) {
-      thumb = '<img src="/uploads/' + item.storedFilename + '" alt="' + esc(item.originalName) + '">';
-    } else {
-      thumb = '<span class="' + (item.type === 'text' ? 'text-icon' : 'file-icon') + '">' +
-        (item.type === 'text' ? '\uD83D\uDCDD' : getFileIcon(item.mimeType)) + '</span>';
-    }
-
-    let actions = '';
-    if (item.type === 'file') {
-      actions += '<button class="btn btn-download btn-icon" data-action="download" data-id="' + item.id + '" title="Download">[↓]</button>';
-      if (item.mimeType && (item.mimeType.startsWith('image/') || item.mimeType.startsWith('video/') || item.mimeType.startsWith('audio/'))) {
-        actions += '<button class="btn btn-ghost btn-icon" data-action="preview" data-id="' + item.id + '" title="Preview">[◉]</button>';
+    } else if (removedItems.length > 0) {
+      const removedByOthers = removedItems.filter((i) => !state.lastDeletedIds.has(i.id));
+      if (removedByOthers.length > 0) {
+        const name =
+          removedByOthers.length === 1 ? getItemName(removedByOthers[0]) : removedByOthers.length;
+        NotificationManager.show('warning', name + ' ' + LABELS.deleted);
       }
-    } else {
-      actions += '<button class="btn btn-ghost" data-action="toggle-text" data-id="' + item.id + '">show</button>';
-    }
-    actions += '<button class="btn btn-delete btn-icon" data-action="delete" data-id="' + item.id + '" title="Delete">[×]</button>';
-
-    let textBlock = '';
-    if (item.type === 'text') {
-      textBlock = '<div class="text-preview" id="text-' + item.id + '">' + esc(item.textContent) + '</div>';
-    }
-
-    return '<div class="item" id="item-' + item.id + '">' +
-      '<div class="item-icon">' + thumb + '</div>' +
-      '<div class="item-info"><div class="name">' + esc(name) + '</div><div class="meta">' + meta + '</div>' + textBlock + '</div>' +
-      '<div class="item-actions">' + actions + '</div>' +
-      '</div>';
-  }
-
-  function truncate(str, max) {
-    if (!str) return '';
-    return str.replace(/\n/g, ' ').substring(0, max) + (str.length > max ? '...' : '');
-  }
-
-  // Inbox actions (delegation)
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const action = btn.dataset.action;
-    const id = btn.dataset.id;
-
-    if (action === 'download') {
-      window.open('/api/download/' + id, '_blank');
-    } else if (action === 'preview') {
-      openPreview(id);
-    } else if (action === 'toggle-text') {
-      const el = document.getElementById('text-' + id);
-      if (el) {
-        el.classList.toggle('show');
-        btn.textContent = el.classList.contains('show') ? 'hide' : 'show';
-      }
-    } else if (action === 'delete') {
-      deleteItem(id);
-    }
-  });
-
-  async function deleteItem(id) {
-    lastDeletedIds.add(id);
-    suppressNotifications(1500);
-    await fetch('/api/items/' + id, { method: 'DELETE' });
-  }
-
-  function openPreview(id) {
-    const item = allItems.find((i) => i.id === id);
-    if (!item || item.type !== 'file') return;
-
-    const mime = item.mimeType || '';
-    let inner = '';
-    if (mime.startsWith('image/')) {
-      inner = '<img src="/uploads/' + item.storedFilename + '" alt="' + esc(item.originalName) + '">';
-    } else if (mime.startsWith('video/')) {
-      inner = '<video controls autoplay style="max-width:90vw;max-height:80vh;"><source src="/uploads/' + item.storedFilename + '" type="' + mime + '"></video>';
-    } else if (mime.startsWith('audio/')) {
-      inner = '<audio controls style="margin:40px;" autoplay><source src="/uploads/' + item.storedFilename + '" type="' + mime + '"></audio>';
-    }
-    if (inner) {
-      previewContent.innerHTML = inner;
-      previewModal.style.display = 'flex';
-    }
-  }
-
-  modalClose.addEventListener('click', () => {
-    previewModal.style.display = 'none';
-    previewContent.innerHTML = '';
-  });
-  previewModal.addEventListener('click', (e) => {
-    if (e.target === previewModal) {
-      previewModal.style.display = 'none';
-      previewContent.innerHTML = '';
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      previewModal.style.display = 'none';
-      previewContent.innerHTML = '';
-    }
-  });
-
-  // Clear all
-  clearAllBtn.addEventListener('click', async () => {
-    if (!confirm('[?] wipe all received items?')) return;
-    lastWiped = true;
-    suppressNotifications(1500);
-    await fetch('/api/items', { method: 'DELETE' });
-  });
-
-  // --- Send logic ---
-
-  uploadZone.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', () => {
-    const files = Array.from(fileInput.files);
-    if (files.length > 0) {
-      selectedFiles = files;
-      renderFileList();
-    }
-  });
-
-  uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
-  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
-  uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove('dragover');
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      selectedFiles = files;
-      renderFileList();
-    }
-  });
-
-  fileList.addEventListener('click', (e) => {
-    const removeBtn = e.target.closest('.entry-remove');
-    if (!removeBtn) return;
-    selectedFiles.splice(parseInt(removeBtn.dataset.index), 1);
-    renderFileList();
-    if (selectedFiles.length === 0) fileInput.value = '';
-  });
-
-  function renderFileList() {
-    if (selectedFiles.length === 0) {
-      fileList.innerHTML = '';
-      return;
-    }
-    fileList.innerHTML = selectedFiles.map((f, i) =>
-      '<div class="file-entry"><span>\uD83D\uDCC4</span>' +
-      '<span class="entry-name">' + esc(f.name) + '</span>' +
-      '<span class="entry-size">' + formatSize(f.size) + '</span>' +
-      '<button class="entry-remove" data-index="' + i + '">&times;</button></div>'
-    ).join('');
-  }
-
-  function setStatus(type, msg) {
-    statusMsg.className = 'status-msg ' + (type || '');
-    statusMsg.textContent = msg || '';
-    statusMsg.style.display = type ? 'block' : 'none';
-  }
-
-  function setLoading(loading) {
-    sendBtn.disabled = loading;
-    sendSpinner.style.display = loading ? 'inline-block' : 'none';
-    sendBtnText.textContent = loading ? 'EXECUTING...' : 'EXECUTE_SEND';
-  }
-
-  function clearForm() {
-    selectedFiles = [];
-    fileInput.value = '';
-    textInput.value = '';
-    renderFileList();
-    uploadProgress.classList.remove('show');
-    progressFill.style.width = '0%';
-  }
-
-  sendBtn.addEventListener('click', async () => {
-    const hasFiles = selectedFiles.length > 0;
-    const hasText = textInput.value.trim().length > 0;
-
-    if (!hasFiles && !hasText) {
-      setStatus('error', '[ERR] select_files or type a message');
-      return;
-    }
-
-    setLoading(true);
-    setStatus('', '');
-
-    if (hasFiles) {
-      const formData = new FormData();
-      selectedFiles.forEach((f) => formData.append('files', f));
-      uploadProgress.classList.add('show');
-
-      try {
-        const uploadResult = await uploadWithProgress(formData);
-        if (uploadResult && uploadResult.uploadIds) {
-          uploadResult.uploadIds.forEach((id) => lastSentIds.add(id));
-        }
-        suppressNotifications(1500);
-      } catch (err) {
-        setLoading(false);
-        uploadProgress.classList.remove('show');
-        return;
+    } else if (addedItems.length > 0) {
+      const addedByOthers = addedItems.filter((i) => !state.lastSentIds.has(i.id));
+      if (addedByOthers.length > 0) {
+        const name =
+          addedByOthers.length === 1
+            ? getItemName(addedByOthers[0])
+            : addedByOthers.length + ' ' + LABELS.newItems;
+        NotificationManager.show('info', LABELS.received + ' ' + name);
       }
     }
-
-    if (hasText) {
-      try {
-        const response = await fetch('/api/text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: textInput.value.trim() }),
-        });
-        const textResult = await response.json();
-        if (textResult && textResult.uploadId) {
-          lastSentIds.add(textResult.uploadId);
-        }
-        suppressNotifications(1500);
-      } catch (err) {
-        setLoading(false);
-        uploadProgress.classList.remove('show');
-        return;
-      }
-    }
-
-    clearForm();
-    setLoading(false);
-  });
-
-  function uploadWithProgress(formData) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/upload');
-
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const pct = Math.round((e.loaded / e.total) * 100);
-          progressFill.style.width = pct + '%';
-          progressText.textContent = 'uploading... ' + pct + '%';
-        }
-      });
-
-      xhr.addEventListener('load', () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const data = JSON.parse(xhr.responseText);
-            resolve(data);
-          } catch (e) {
-            resolve({});
-          }
-        } else {
-          reject(new Error('Upload failed (status ' + xhr.status + ')'));
-        }
-      });
-
-      xhr.addEventListener('error', () => reject(new Error('Network error')));
-      xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
-      xhr.send(formData);
-    });
   }
 
-  // Socket.io
-  socket.on('items-updated', (items) => {
-    const newItems = items || [];
-    const oldIds = new Set(allItems.map((i) => i.id));
-    const newIds = new Set(newItems.map((i) => i.id));
+  setLastWiped(false);
+  setFirstItemsUpdate(false);
+  setAllItems(newItems);
+  renderInbox(newItems);
+}
 
-    const addedItems = newItems.filter((i) => !oldIds.has(i.id));
-    const removedItems = allItems.filter((i) => !newIds.has(i.id));
-
-    // Clean up stale sent IDs and deleted IDs
-    const validIds = new Set(newItems.map((i) => i.id));
-    lastSentIds.forEach((id) => {
-      if (!validIds.has(id)) lastSentIds.delete(id);
-    });
-    lastDeletedIds.forEach((id) => {
-      if (!validIds.has(id)) lastDeletedIds.delete(id);
-    });
-
-    if (!isFirstItemsUpdate && !shouldSuppressNotifications()) {
-      if (allItems.length > 0 && newItems.length === 0) {
-        if (!lastWiped) {
-          NotificationManager.show('warning', 'All items wiped');
-        }
-      } else if (removedItems.length > 0) {
-        const removedByOthers = removedItems.filter((i) => !lastDeletedIds.has(i.id));
-        if (removedByOthers.length > 0) {
-          const name = removedByOthers.length === 1
-            ? (removedByOthers[0].type === 'text' ? 'Text message' : removedByOthers[0].originalName)
-            : removedByOthers.length + ' items';
-          NotificationManager.show('warning', name + ' deleted');
-        }
-      } else if (addedItems.length > 0) {
-        const addedByOthers = addedItems.filter((i) => !lastSentIds.has(i.id));
-        if (addedByOthers.length > 0) {
-          const name = addedByOthers.length === 1
-            ? (addedByOthers[0].type === 'text' ? 'Text message' : addedByOthers[0].originalName)
-            : addedByOthers.length + ' new items';
-          NotificationManager.show('info', 'Received: ' + name);
-        }
-      }
-    }
-    lastWiped = false;
-    isFirstItemsUpdate = false;
-
-    allItems = newItems;
-    renderInbox(allItems);
-  });
-
+function initSocket() {
+  socket.on('items-updated', handleItemsUpdated);
   socket.on('user-connected', () => {
-    NotificationManager.show('info', 'New device connected');
+    NotificationManager.show('info', LABELS.newDeviceConnected);
   });
-
   socket.on('user-disconnected', () => {
-    NotificationManager.show('info', 'Device disconnected');
+    NotificationManager.show('info', LABELS.deviceDisconnected);
   });
+}
 
-  // Init
+function init() {
+  initTabs();
+  initQr();
+  initSend();
+  initInbox();
+  initPreview();
+  initSocket();
   loadInfo();
-})();
+}
+
+init();
