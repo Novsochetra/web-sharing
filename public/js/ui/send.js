@@ -1,6 +1,13 @@
 import { sendText, uploadFiles } from '../api.js';
 import { LABELS } from '../constants.js';
-import { addLastSentId, getState, setSelectedFiles, suppressNotifications } from '../state.js';
+import {
+  addLastSentId,
+  endOperation,
+  getState,
+  setSelectedFiles,
+  startOperation,
+  suppressNotifications,
+} from '../state.js';
 import { esc, formatSize } from '../utils.js';
 
 const uploadZone = document.getElementById('upload-zone');
@@ -75,40 +82,36 @@ async function handleSend() {
     return;
   }
 
+  startOperation();
   setLoading(true);
   setStatus('', '');
 
-  if (hasFiles) {
-    uploadProgress.classList.add('show');
-    try {
+  try {
+    if (hasFiles) {
+      uploadProgress.classList.add('show');
       const result = await uploadFiles(files, onUploadProgress);
       if (result && result.uploadIds) {
         result.uploadIds.forEach((id) => addLastSentId(id));
       }
       suppressNotifications();
-    } catch {
-      setLoading(false);
-      uploadProgress.classList.remove('show');
-      return;
     }
-  }
 
-  if (hasText) {
-    try {
+    if (hasText) {
       const result = await sendText(text);
       if (result && result.uploadId) {
         addLastSentId(result.uploadId);
       }
       suppressNotifications();
-    } catch {
-      setLoading(false);
-      uploadProgress.classList.remove('show');
-      return;
     }
-  }
 
-  clearForm();
-  setLoading(false);
+    clearForm();
+  } catch {
+    // keep loading state as-is; errors are silent for now
+  } finally {
+    uploadProgress.classList.remove('show');
+    setLoading(false);
+    endOperation();
+  }
 }
 
 export function initSend() {

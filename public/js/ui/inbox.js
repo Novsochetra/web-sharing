@@ -1,6 +1,12 @@
 import { deleteItem, clearAllItems } from '../api.js';
 import { LABELS } from '../constants.js';
-import { addLastDeletedId, setLastWiped, suppressNotifications } from '../state.js';
+import {
+  addLastDeletedId,
+  endOperation,
+  setLastWiped,
+  startOperation,
+  suppressNotifications,
+} from '../state.js';
 import { esc, formatSize, getFileIcon, timeAgo, truncate } from '../utils.js';
 import { openPreview } from './preview.js';
 
@@ -101,16 +107,26 @@ export function renderInbox(items) {
 }
 
 export async function removeItem(id) {
-  addLastDeletedId(id);
-  suppressNotifications();
-  await deleteItem(id);
+  startOperation();
+  try {
+    addLastDeletedId(id);
+    suppressNotifications();
+    await deleteItem(id);
+  } finally {
+    endOperation();
+  }
 }
 
 export async function wipeAll() {
   if (!confirm(LABELS.wipeConfirm)) return;
-  setLastWiped(true);
-  suppressNotifications();
-  await clearAllItems();
+  startOperation();
+  try {
+    setLastWiped(true);
+    suppressNotifications();
+    await clearAllItems();
+  } finally {
+    endOperation();
+  }
 }
 
 export function initInbox() {

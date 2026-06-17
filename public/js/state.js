@@ -9,6 +9,10 @@ const state = {
   suppressUntil: 0,
 };
 
+let pendingOperations = 0;
+const bufferedEvents = [];
+let eventHandler = null;
+
 export function getState() {
   return state;
 }
@@ -56,4 +60,28 @@ export function cleanupStaleIds(validIds) {
   state.lastDeletedIds.forEach((id) => {
     if (!validIds.has(id)) state.lastDeletedIds.delete(id);
   });
+}
+
+export function startOperation() {
+  pendingOperations += 1;
+}
+
+export function registerEventHandler(handler) {
+  eventHandler = handler;
+}
+
+export function endOperation() {
+  pendingOperations = Math.max(0, pendingOperations - 1);
+  if (pendingOperations === 0 && eventHandler) {
+    const events = bufferedEvents.splice(0);
+    events.forEach(eventHandler);
+  }
+}
+
+export function tryBufferEvent(items) {
+  if (pendingOperations > 0) {
+    bufferedEvents.push(items);
+    return true;
+  }
+  return false;
 }

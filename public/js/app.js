@@ -3,10 +3,12 @@ import { NotificationManager } from './notifications.js';
 import {
   cleanupStaleIds,
   getState,
+  registerEventHandler,
   setAllItems,
   setFirstItemsUpdate,
   setLastWiped,
   shouldSuppressNotifications,
+  tryBufferEvent,
 } from './state.js';
 import { initInbox, renderInbox } from './ui/inbox.js';
 import { initPreview } from './ui/preview.js';
@@ -78,7 +80,10 @@ function handleItemsUpdated(items) {
 }
 
 function initSocket() {
-  socket.on('items-updated', handleItemsUpdated);
+  socket.on('items-updated', (items) => {
+    if (tryBufferEvent(items)) return;
+    handleItemsUpdated(items);
+  });
   socket.on('user-connected', () => {
     NotificationManager.show('info', LABELS.newDeviceConnected);
   });
@@ -88,6 +93,7 @@ function initSocket() {
 }
 
 function init() {
+  registerEventHandler(handleItemsUpdated);
   initTabs();
   initQr();
   initSend();
